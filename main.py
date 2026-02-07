@@ -88,14 +88,11 @@ class HHBot:
         confirm_btn.click()
         return True
 
-    def run_cycle(self):
+    def run_cycle(self) -> bool:
         self.start()
         try:
             self.ensure_auth()
-            self.auto_up()
-        except RuntimeError as e:
-            if str(e) == "NO_UPDATE_BUTTON":
-                self.close()
+            return self.auto_up()
         finally:
             self.close()
 
@@ -117,10 +114,13 @@ def main():
 
         while True:
             try:
-                bot.run_cycle()
-                print("Резюме обновлено.")
+                updated = bot.run_cycle()
+                if updated:
+                    print("Резюме обновлено.")
+                else:
+                    print("Кнопки нет (КД). Ждём следующий цикл.")
             except Exception as e:
-                print(f"Ошибка: {e}")
+                print(f"Ошибка в цикле: {e}")
 
             print(f"Ждём {config.interval} часов до следующего обновления...")
             time.sleep(config.interval_in_hour())
