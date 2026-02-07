@@ -1,4 +1,5 @@
 from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 import os
 import time
 
@@ -9,8 +10,10 @@ class Config:
         self.interval = interval
         self.headless = headless
 
-        def interval_in_hour(self):
-            return int(self.interval_hours * 3600)
+
+    def interval_in_hour(self):
+        return self.interval * 3600
+
 class HHBot:
     def __init__(self, playwright, config: Config):
         self.playwright = playwright
@@ -64,13 +67,18 @@ class HHBot:
 
         self.context.storage_state(path=self.config.storage_path)
 
-    def auto_up(self):
+    def auto_up(self) -> bool:
         self.page.locator('[data-qa="mainmenu_profileAndResumes"]').click()
 
         update_btn = self.page.locator(
             '[data-qa="resume-update-button resume-update-button_actions"]'
         )
-        update_btn.wait_for(state="visible", timeout=10000)
+
+        try:
+            update_btn.wait_for(state="visible", timeout=10000)
+        except PlaywrightTimeoutError:
+            return False
+
         update_btn.click()
 
         confirm_btn = self.page.locator(
@@ -78,12 +86,16 @@ class HHBot:
         )
         confirm_btn.wait_for(state="visible", timeout=10000)
         confirm_btn.click()
+        return True
 
     def run_cycle(self):
         self.start()
         try:
             self.ensure_auth()
             self.auto_up()
+        except RuntimeError as e:
+            if str(e) == "NO_UPDATE_BUTTON":
+                self.close()
         finally:
             self.close()
 
@@ -111,7 +123,7 @@ def main():
                 print(f"Ошибка: {e}")
 
             print(f"Ждём {config.interval} часов до следующего обновления...")
-            time.sleep(config.interval)
+            time.sleep(config.interval_in_hour())
 
 
 if __name__ == "__main__":
