@@ -1,5 +1,6 @@
 from playwright.sync_api import sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+from pathlib import Path
 import re
 from datetime import datetime
 import os
@@ -41,7 +42,9 @@ class HHBot:
             self.page = None
 
     def ensure_auth(self):
-        if not os.path.exists(self.config.storage_path):
+        self.page.goto(self.config.url)
+
+        if self.page.locator('[data-qa="login"]').is_visible():
             self.login_and_save_state()
 
     def login_and_save_state(self):
@@ -122,7 +125,8 @@ class HHBot:
             self.close()
 
 def main():
-    STORAGE_PATH = r"C:\work\hh_pro\hh_auth.json"
+    BASE_DIR = Path(__file__).resolve().parent
+    STORAGE_PATH = BASE_DIR / "hh_auth.json"
     URL = "https://hh.ru"
 
     config = Config(
