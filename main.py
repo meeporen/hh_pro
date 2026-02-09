@@ -1,18 +1,15 @@
 from playwright.sync_api import sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+import re
+from datetime import datetime
 import os
 import time
 
 class Config:
-    def __init__(self, storage_path: str, url: str, interval: float, headless: bool):
+    def __init__(self, storage_path: str, url: str, headless: bool):
         self.storage_path = storage_path
         self.url = url
-        self.interval = interval
         self.headless = headless
-
-
-    def interval_in_hour(self):
-        return self.interval * 3600
 
 class HHBot:
     def __init__(self, playwright, config: Config):
@@ -88,42 +85,65 @@ class HHBot:
         confirm_btn.click()
         return True
 
+    def check_time(self) -> int:
+        text = self.page.locator('[data-qa="title-description"]').first.inner_text()
+
+        time_match = re.search(r'\d{2}:\d{2}', text)
+        if not time_match:
+            return 60
+
+        h, m = map(int, time_match.group(0).split(':'))
+        target_sec = h * 3600 + m * 60
+
+        now = datetime.now()
+        now_sec = now.hour * 3600 + now.minute * 60 + now.second
+
+        delta = target_sec - now_sec
+
+        if delta < 0:
+            delta += 24 * 3600
+
+        return delta + 10
+
     def run_cycle(self) -> bool:
         self.start()
         try:
             self.ensure_auth()
-            return self.auto_up()
+            update = self.auto_up()
+            if update:
+                wait_sec = 4*3600+30
+                return wait_sec
+            else:
+                wait_sec = self.check_time()
+
+            return wait_sec
+
         finally:
             self.close()
 
 def main():
     STORAGE_PATH = r"C:\work\hh_pro\hh_auth.json"
     URL = "https://hh.ru"
-    N_HOURS = 4.01
 
     config = Config(
         storage_path=STORAGE_PATH,
         url=URL,
-        interval=N_HOURS,
         headless=False,
     )
 
     with sync_playwright() as p:
         bot = HHBot(p, config)
-        print(f"Скрипт запущен. Автообновление каждые {config.interval} часов.")
+        print(f"Скрипт запущен. Автообновление каждые часов.")
 
         while True:
             try:
-                updated = bot.run_cycle()
-                if updated:
-                    print("Резюме обновлено.")
-                else:
-                    print("Кнопки нет (КД). Ждём следующий цикл.")
+                wait_sec = bot.run_cycle()
             except Exception as e:
                 print(f"Ошибка в цикле: {e}")
+                wait_sec = 300
 
-            print(f"Ждём {config.interval} часов до следующего обновления...")
-            time.sleep(config.interval_in_hour())
+            print(f"Ждём {wait_sec // 60} минут до следующей попытки")
+            time.sleep(wait_sec)
 
 
 if __name__ == "__main__":
