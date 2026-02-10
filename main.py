@@ -88,12 +88,12 @@ class HHBot:
         confirm_btn.click()
         return True
 
-    def check_time(self) -> int:
+    def check_time(self) -> tuple[int, str]:
         text = self.page.locator('[data-qa="title-description"]').first.inner_text()
 
         time_match = re.search(r'\d{2}:\d{2}', text)
         if not time_match:
-            return 60
+            return 60, "60 сек"
 
         h, m = map(int, time_match.group(0).split(':'))
         target_sec = h * 3600 + m * 60
@@ -106,16 +106,16 @@ class HHBot:
         if delta < 0:
             delta += 24 * 3600
 
-        return delta + 10
+        return delta + 60, time_match.group(0)
 
-    def run_cycle(self) -> bool:
+    def run_cycle(self) -> tuple[int, str]:
         self.start()
         try:
             self.ensure_auth()
             update = self.auto_up()
             if update:
                 wait_sec = 4*3600+30
-                return wait_sec
+                return wait_sec, "после апа"
             else:
                 wait_sec = self.check_time()
 
@@ -130,23 +130,21 @@ def main():
     URL = "https://hh.ru"
 
     config = Config(
-        storage_path=STORAGE_PATH,
+        storage_path=str(STORAGE_PATH),
         url=URL,
         headless=False,
     )
 
     with sync_playwright() as p:
         bot = HHBot(p, config)
-        print(f"Скрипт запущен. Автообновление каждые часов.")
-
         while True:
             try:
-                wait_sec = bot.run_cycle()
+                wait_sec, time_match = bot.run_cycle()
             except Exception as e:
                 print(f"Ошибка в цикле: {e}")
-                wait_sec = 300
+                wait_sec, time_match = 300, "300 сек"
 
-            print(f"Ждём {wait_sec // 60} минут до следующей попытки")
+            print(f"Ждём {time_match} до следующей попытки")
             time.sleep(wait_sec)
 
 
